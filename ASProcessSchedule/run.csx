@@ -21,25 +21,13 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
     string schema = System.Configuration.ConfigurationManager.ConnectionStrings["schema"].ConnectionString;
 
 
-    // Check if process is not running 
-    string status = ExecuteStoredProcedure(connStringSql, schema, "[sp_get_process_status_flag]");
-    if (status.ToLower() == "running")
+    string id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
+    if (string.IsNullOrEmpty(id) || id == "0")
     {
-        return;
+        return; 
     }
-
-    status = ExecuteStoredProcedure(connStringSql, schema, "[sp_get_process_flag]");
-    if (status.ToLower() == "0")
-    {
-        return;
-    }
-
-    //Start Process
-    ExecuteStoredProcedure(connStringSql, schema, "[sp_start_process]");
-    ExecuteStoredProcedure(connStringSql, schema, "[sp_set_process_flag]", "@status_flag", "0");
 
     string responseSuccess = "Success";
-
     try
     {
         Server server = new Server();
@@ -48,16 +36,17 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
         db.Model.RequestRefresh(RefreshType.Full);
         db.Model.SaveChanges();
         server.Refresh(true);
-        
+
     }
     catch (Exception ex)
     {
         responseSuccess = ex.Message;
-
     }
 
-    ExecuteStoredProcedure(connStringSql, schema, "[sp_finish_process]", "@status_flag", responseSuccess);
-    
+    Dictionary<string, string> param = new Dictionary<string, string>();
+    param.Add("@jobid", id);
+    param.Add("@jobMessage", responseSuccess);
+    ExecuteStoredProcedure(connStringSql, schema, "[sp_finish_job]", param);
 }
 
 public static string ExecuteStoredProcedure(string connectionString, string schema, string spName)
@@ -67,33 +56,46 @@ public static string ExecuteStoredProcedure(string connectionString, string sche
         using (SqlCommand command = new SqlCommand(schema + "." + spName, conn) {CommandType = CommandType.StoredProcedure})
         {
             conn.Open();
-            var data = command.ExecuteReader(CommandBehavior.SingleRow);
-            bool dataRead = data.Read();
-            if (dataRead)
-            {
-                return data[0].ToString();
-            }
+            //var data = command.ExecuteReader(CommandBehavior.SingleResult);
+            //bool dataRead = data.Read();
+            //if (dataRead)
+            //{
+            //    return data[0].ToString();
+            //}
+            SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
+            retval.Direction = ParameterDirection.ReturnValue;
+            command.ExecuteNonQuery(); // MISSING
+            return command.Parameters["@returnval"].Value.ToString();
 
         }
     };
     return string.Empty;
 }
 
-public static string ExecuteStoredProcedure(string connectionString, string schema, string spName, string param, string paramValue)
+public static string ExecuteStoredProcedure(string connectionString, string schema, string spName, Dictionary<string,string> param )
 {
     using (SqlConnection conn = new SqlConnection(connectionString))
     {
         using (SqlCommand command = new SqlCommand(schema + "." + spName, conn) { CommandType = CommandType.StoredProcedure })
         {
             conn.Open();
-            command.Parameters.Add(new SqlParameter(param, paramValue));
-            var data = command.ExecuteReader(CommandBehavior.SingleRow);
-            bool dataRead = data.Read();
-            if (dataRead)
+            foreach (var keyValuePair in param)
             {
-                return data[0].ToString();
+                command.Parameters.Add(new SqlParameter(keyValuePair.Key, keyValuePair.Value));
             }
-            
+
+            SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
+            retval.Direction = ParameterDirection.ReturnValue;
+            command.ExecuteNonQuery(); // MISSING
+            return command.Parameters["@returnval"].Value.ToString();
+
+            //var data = command.ExecuteReader(CommandBehavior.SingleResult);
+            //bool dataRead = data.Read();
+            //if (dataRead)
+            //{
+            //   return data[0].ToString();
+            //}
+
         }
     };
     return string.Empty;
