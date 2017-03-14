@@ -19,17 +19,16 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
 
     string connStringSql = System.Configuration.ConfigurationManager.ConnectionStrings["connStringSql"].ConnectionString;
     string schema = System.Configuration.ConfigurationManager.ConnectionStrings["schema"].ConnectionString;
-
-
-    string id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
-    if (string.IsNullOrEmpty(id) || id == "0")
-    {
-        return; 
-    }
-
     string responseSuccess = "Success";
+    
     try
     {
+        string id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
+        if (string.IsNullOrEmpty(id) || id == "0")
+        {
+            return; 
+        }
+
         Server server = new Server();
         server.Connect(connStringAS);
         var db = server.Databases.Find(databaseAS);
