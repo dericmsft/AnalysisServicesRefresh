@@ -20,41 +20,53 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
     string connStringSql = System.Configuration.ConfigurationManager.ConnectionStrings["connStringSql"].ConnectionString;
     string schema = System.Configuration.ConfigurationManager.ConnectionStrings["schema"].ConnectionString;
     string functionName = System.Configuration.ConfigurationManager.ConnectionStrings["functionName"].ConnectionString;
-    
+    log.Info("Recieved connection strings");
     
     string responseSuccess = "Success";
     string id = "";
     try
     {
+        log.Info("check function name");
         string functionSql = ExecuteSql(connStringSql,
             $"SELECT [value] FROM {schema}.[configuration] WHERE[configuration_group] = 'SolutionTemplate' AND[configuration_subgroup] = 'SSAS' AND[name] = 'FunctionName';");
         if (functionSql != functionName)
         {
+            log.Info("function name didnt match");
             return;
         }
 
+        log.Info("function name matched");
         id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
         if (string.IsNullOrEmpty(id) || id == "0")
         {
             return;
         }
 
+        log.Info("Trying to connect");
         Server server = new Server();
         server.Connect(connStringAS);
+         log.Info("Connected");
         var db = server.Databases.Find(databaseAS);
+        log.Info("found db");
         db.Model.RequestRefresh(RefreshType.Full);
+        log.Info("Request process");
         db.Model.SaveChanges();
+        log.Info("Processed");
 
     }
     catch (Exception ex)
     {
+        log.Info("Exception");
         responseSuccess = ex.Message;
     }
 
+    log.Info("Write result back to DB");
     Dictionary<string, string> param = new Dictionary<string, string>();
     param.Add("@jobid", id);
     param.Add("@jobMessage", responseSuccess);
     ExecuteStoredProcedure(connStringSql, schema, "[sp_finish_job]", param);
+    log.Info("write back to db completed");
+    log.Info("Finished");
 }
 
 public static string ExecuteStoredProcedure(string connectionString, string schema, string spName)
