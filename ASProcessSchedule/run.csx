@@ -19,10 +19,18 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
 
     string connStringSql = System.Configuration.ConfigurationManager.ConnectionStrings["connStringSql"].ConnectionString;
     string schema = System.Configuration.ConfigurationManager.ConnectionStrings["schema"].ConnectionString;
+    string functionName = System.Configuration.ConfigurationManager.ConnectionStrings["functionName"].ConnectionString;
+    
     string responseSuccess = "Success";
     string id = "";
     try
     {
+         string functionSql =  ExecuteStoredProcedure(connStringSql, schema, "[sp_get_function_id]");
+         if (functionSql != functionName)
+         {
+             return;
+         }
+        
         id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
         if (string.IsNullOrEmpty(id) || id == "0")
         {
@@ -55,15 +63,10 @@ public static string ExecuteStoredProcedure(string connectionString, string sche
         using (SqlCommand command = new SqlCommand(schema + "." + spName, conn) {CommandType = CommandType.StoredProcedure})
         {
             conn.Open();
-            //var data = command.ExecuteReader(CommandBehavior.SingleResult);
-            //bool dataRead = data.Read();
-            //if (dataRead)
-            //{
-            //    return data[0].ToString();
-            //}
+           
             SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
             retval.Direction = ParameterDirection.ReturnValue;
-            command.ExecuteNonQuery(); // MISSING
+            command.ExecuteNonQuery();
             return command.Parameters["@returnval"].Value.ToString();
 
         }
@@ -85,16 +88,8 @@ public static string ExecuteStoredProcedure(string connectionString, string sche
 
             SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
             retval.Direction = ParameterDirection.ReturnValue;
-            command.ExecuteNonQuery(); // MISSING
+            command.ExecuteNonQuery(); 
             return command.Parameters["@returnval"].Value.ToString();
-
-            //var data = command.ExecuteReader(CommandBehavior.SingleResult);
-            //bool dataRead = data.Read();
-            //if (dataRead)
-            //{
-            //   return data[0].ToString();
-            //}
-
         }
     };
     return string.Empty;
