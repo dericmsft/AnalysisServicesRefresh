@@ -21,20 +21,22 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
     string schema = System.Configuration.ConfigurationManager.ConnectionStrings["schema"].ConnectionString;
     string functionName = System.Configuration.ConfigurationManager.ConnectionStrings["functionName"].ConnectionString;
     
+    
     string responseSuccess = "Success";
     string id = "";
     try
     {
-         string functionSql =  ExecuteStoredProcedure(connStringSql, schema, "[sp_get_function_id]");
-         if (functionSql != functionName)
-         {
-             return;
-         }
-        
+        string functionSql = ExecuteSql(connStringSql,
+            $"SELECT [value] FROM {schema}.[configuration] WHERE[configuration_group] = 'SolutionTemplate' AND[configuration_subgroup] = 'SSAS' AND[name] = 'FunctionName';");
+        if (functionSql != functionName)
+        {
+            return;
+        }
+
         id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
         if (string.IsNullOrEmpty(id) || id == "0")
         {
-            return; 
+            return;
         }
 
         Server server = new Server();
@@ -42,7 +44,6 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
         var db = server.Databases.Find(databaseAS);
         db.Model.RequestRefresh(RefreshType.Full);
         db.Model.SaveChanges();
-        server.Refresh(true);
 
     }
     catch (Exception ex)
@@ -60,25 +61,51 @@ public static string ExecuteStoredProcedure(string connectionString, string sche
 {
     using (SqlConnection conn = new SqlConnection(connectionString))
     {
-        using (SqlCommand command = new SqlCommand(schema + "." + spName, conn) {CommandType = CommandType.StoredProcedure})
+        using (
+            SqlCommand command = new SqlCommand(schema + "." + spName, conn)
+            {
+                CommandType = CommandType.StoredProcedure
+            })
         {
             conn.Open();
-           
             SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
             retval.Direction = ParameterDirection.ReturnValue;
-            command.ExecuteNonQuery();
+            command.ExecuteNonQuery(); 
             return command.Parameters["@returnval"].Value.ToString();
 
         }
-    };
-    return string.Empty;
+    }
 }
 
-public static string ExecuteStoredProcedure(string connectionString, string schema, string spName, Dictionary<string,string> param )
+public static string ExecuteSql(string connectionString, string sqlStatement)
 {
     using (SqlConnection conn = new SqlConnection(connectionString))
     {
-        using (SqlCommand command = new SqlCommand(schema + "." + spName, conn) { CommandType = CommandType.StoredProcedure })
+        using (
+            SqlCommand command = new SqlCommand(sqlStatement, conn)
+            {
+                CommandType = CommandType.Text
+            })
+        {
+            conn.Open();
+            var data = command.ExecuteReader();
+            data.Read();
+            return data[0].ToString();
+
+        }
+    }
+}
+
+public static string ExecuteStoredProcedure(string connectionString, string schema, string spName,
+    Dictionary<string, string> param)
+{
+    using (SqlConnection conn = new SqlConnection(connectionString))
+    {
+        using (
+            SqlCommand command = new SqlCommand(schema + "." + spName, conn)
+            {
+                CommandType = CommandType.StoredProcedure
+            })
         {
             conn.Open();
             foreach (var keyValuePair in param)
@@ -88,9 +115,8 @@ public static string ExecuteStoredProcedure(string connectionString, string sche
 
             SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
             retval.Direction = ParameterDirection.ReturnValue;
-            command.ExecuteNonQuery(); 
+            command.ExecuteNonQuery();
             return command.Parameters["@returnval"].Value.ToString();
         }
-    };
-    return string.Empty;
+    }
 }
