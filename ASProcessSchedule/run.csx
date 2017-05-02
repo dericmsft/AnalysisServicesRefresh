@@ -2,31 +2,44 @@
 #r "Microsoft.AnalysisServices.dll"
 #r "Microsoft.AnalysisServices.Core.dll"
 #r "Microsoft.AnalysisServices.Tabular.dll"
+#r "Microsoft.IdentityModel.Clients.ActiveDirectory"
 #r "System.Data"
 
 using System.Data;
 using System.Data.SqlClient;
 using System.Net;
 using RefreshType = Microsoft.AnalysisServices.Tabular.RefreshType;
+using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Server = Microsoft.AnalysisServices.Tabular.Server;
 
-public static async Task Run (TimerInfo myTimer, TraceWriter log)
+public static async Task Run(TimerInfo myTimer, TraceWriter log)
 {
     log.Info("C# HTTP trigger function processed a request.");
     // Configuration
-    string connStringAS = System.Configuration.ConfigurationManager.ConnectionStrings["connStringAS"].ConnectionString;
-    string databaseAS = System.Configuration.ConfigurationManager.ConnectionStrings["databaseAS"].ConnectionString;
+    string appId = System.Configuration.ConfigurationManager.ConnectionStrings["appId"].ConnectionString;
+    string appKey = System.Configuration.ConfigurationManager.ConnectionStrings["appKey"].ConnectionString;
+    string username = System.Configuration.ConfigurationManager.ConnectionStrings["username"].ConnectionString;
+    string tenantId = System.Configuration.ConfigurationManager.ConnectionStrings["tenantId"].ConnectionString;
+    string asServer = System.Configuration.ConfigurationManager.ConnectionStrings["asServer"].ConnectionString;
 
+    string databaseAS = System.Configuration.ConfigurationManager.ConnectionStrings["databaseAS"].ConnectionString;
     string connStringSql = System.Configuration.ConfigurationManager.ConnectionStrings["connStringSql"].ConnectionString;
     string schema = System.Configuration.ConfigurationManager.ConnectionStrings["schema"].ConnectionString;
     string functionName = System.Configuration.ConfigurationManager.ConnectionStrings["functionName"].ConnectionString;
-    log.Info("Recieved connection strings");
-    
+
+    Uri asServerUrl = new Uri(asServer);
+    string resource = "https://" + asServerUrl.Host;
+    AuthenticationContext context = new AuthenticationContext("https://login.windows.net/" + tenantId);
+    ClientCredential credential = new ClientCredential(appId, appKey);
+    var token = await context.AcquireTokenAsync(resource, credential);
+
+    string password = token.AccessToken;
+    string connectionString = $"Provider=MSOLAP;Data Source={asServer};Password={password};";
+
     string responseSuccess = "Success";
     string id = "";
     try
     {
-        log.Info("check function name");
         string functionSql = ExecuteSql(connStringSql,
             $"SELECT [value] FROM {schema}.[configuration] WHERE[configuration_group] = 'SolutionTemplate' AND[configuration_subgroup] = 'SSAS' AND[name] = 'FunctionName';");
         if (functionSql != functionName)
@@ -35,7 +48,6 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
             return;
         }
 
-        log.Info("function name matched");
         id = ExecuteStoredProcedure(connStringSql, schema, "[sp_start_job]");
         if (string.IsNullOrEmpty(id) || id == "0")
         {
@@ -44,8 +56,8 @@ public static async Task Run (TimerInfo myTimer, TraceWriter log)
 
         log.Info("Trying to connect");
         Server server = new Server();
-        server.Connect(connStringAS);
-         log.Info("Connected");
+        server.Connect(connectionString);
+        log.Info("Connected");
         var db = server.Databases.Find(databaseAS);
         log.Info("found db");
         db.Model.RequestRefresh(RefreshType.Full);
@@ -82,7 +94,7 @@ public static string ExecuteStoredProcedure(string connectionString, string sche
             conn.Open();
             SqlParameter retval = command.Parameters.Add("@returnval", SqlDbType.VarChar);
             retval.Direction = ParameterDirection.ReturnValue;
-            command.ExecuteNonQuery(); 
+            command.ExecuteNonQuery();
             return command.Parameters["@returnval"].Value.ToString();
 
         }
