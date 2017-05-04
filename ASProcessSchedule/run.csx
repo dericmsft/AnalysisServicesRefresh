@@ -41,6 +41,7 @@ public static async Task Run(TimerInfo myTimer, TraceWriter log)
     {
         string functionSql = ExecuteSql(connStringSql,
             $"SELECT [value] FROM {schema}.[configuration] WHERE[configuration_group] = 'SolutionTemplate' AND[configuration_subgroup] = 'SSAS' AND[name] = 'FunctionName';");
+        
         if (functionSql != functionName)
         {
             log.Info("function name didnt match");
@@ -53,17 +54,37 @@ public static async Task Run(TimerInfo myTimer, TraceWriter log)
             return;
         }
 
-        log.Info("Trying to connect");
-        Server server = new Server();
-        server.Connect(connectionString);
-        log.Info("Connected");
-        var db = server.Databases.Find(databaseAS);
-        log.Info("found db");
-        db.Model.RequestRefresh(RefreshType.Full);
-        log.Info("Request process");
-        db.Model.SaveChanges();
-        log.Info("Processed");
+         string lastDateProcessed = ExecuteSql(connStringSql,
+            $"SELECT TOP 1 [endTime] FROM {schema}.[ssas_jobs] WHERE [statusMessage] = 'Success' ORDER BY [endTime] DESC;");
 
+        bool process = true;
+        if(lastDateProcessed != null)
+        {
+            DateTime lastProcessed = DateTime.Parse(lastDateProcessed);
+            DateTime now = DateTime.Now;
+            if(now - lastProcessed < TimeSpan.FromMinutes(15))
+            {
+                process = false;
+            }
+        }    
+       
+        if(process)
+        {
+            log.Info("Trying to connect");
+            Server server = new Server();
+            server.Connect(connectionString);
+            log.Info("Connected");
+            var db = server.Databases.Find(databaseAS);
+            log.Info("found db");
+            db.Model.RequestRefresh(RefreshType.Full);
+            log.Info("Request process");
+            db.Model.SaveChanges();
+            log.Info("Processed");
+        }
+        else
+        {
+            responseSuccess = "Last processed time was less than 15 miniutes ago";
+        }
     }
     catch (Exception ex)
     {
@@ -112,9 +133,13 @@ public static string ExecuteSql(string connectionString, string sqlStatement)
         {
             conn.Open();
             var data = command.ExecuteReader();
-            data.Read();
-            return data[0].ToString();
-
+            if(data.HasRows)
+            {
+                data.Read();
+                return data[0].ToString();
+            }
+            
+            return null;
         }
     }
 }
