@@ -1,9 +1,2 @@
 {
-  "frameworks": {
-    "net46":{
-      "dependencies": {
-        "Microsoft.IdentityModel.Clients.ActiveDirectory": "3.14.1"
-      }
-    }
-   }
 }
