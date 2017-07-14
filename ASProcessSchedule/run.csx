@@ -2,6 +2,9 @@
 #r "Microsoft.AnalysisServices.dll"
 #r "Microsoft.AnalysisServices.Core.dll"
 #r "Microsoft.AnalysisServices.Tabular.dll"
+#r "Microsoft.IdentityModel.Clients.ActiveDirectory.Platform.dll"
+#r "Microsoft.IdentityModel.Clients.ActiveDirectory.dll"
+    
 #r "System.Data"
 
 using System.Data;
