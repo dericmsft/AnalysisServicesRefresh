@@ -1,0 +1,13 @@
+{
+	"frameworks": {
+		"net46": {
+			"dependencies": {
+				"Microsoft.AnalysisServices": "*",
+				"Microsoft.AnalysisServices.Tabular": "*",
+				"Microsoft.Deployment.Common.ActionModel": "*",
+				"Microsoft.Deployment.Common.Actions": "*",
+				"Microsoft.Deployment.Common.Helpers": "*"
+			}
+		}
+	}
+}
