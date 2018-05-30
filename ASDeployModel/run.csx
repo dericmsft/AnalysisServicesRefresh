@@ -16,13 +16,16 @@ using Microsoft.Deployment.Common.ActionModel;
 using Microsoft.Deployment.Common.Actions;
 using Microsoft.Deployment.Common.Helpers;
 
-public static async Task Run()
+public static async Task<HttpResponseMessage> Run(HttpRequestMessage req, TraceWriter log)
+{
 {
     log.Info("C# HTTP trigger function processed a request.");
     // Configuration
-    string AzureTokenAS = System.Configuration.ConfigurationManager.ConnectionStrings["AzureTokenAS"].ConnectionString;
-    string ASServerUrl = System.Configuration.ConfigurationManager.ConnectionStrings["ASServerUrl"].ConnectionString;
-    string ASDatabase = System.Configuration.ConfigurationManager.ConnectionStrings["ASDatabase"].ConnectionString;
+    string appId = System.Configuration.ConfigurationManager.ConnectionStrings["appId"].ConnectionString;
+    string appKey = System.Configuration.ConfigurationManager.ConnectionStrings["appKey"].ConnectionString;
+    string tenantId = System.Configuration.ConfigurationManager.ConnectionStrings["tenantId"].ConnectionString;
+    string asServer = System.Configuration.ConfigurationManager.ConnectionStrings["asServer"].ConnectionString;
+    string ASDatabase = System.Configuration.ConfigurationManager.ConnectionStrings["databaseAS"].ConnectionString;
     string ModelFilePath = System.Configuration.ConfigurationManager.ConnectionStrings["modelFilePath"].ConnectionString;
             
 
@@ -32,13 +35,20 @@ public static async Task Run()
     //string asDatabase = request.DataStore.GetValue("ASDatabase");
     //string modelFile = request.DataStore.GetValue("modelFilePath");
 
+    Uri asServerUrl = new Uri(asServer);
+    string resource = "https://" + asServerUrl.Host;
+    AuthenticationContext context = new AuthenticationContext("https://login.windows.net/" + tenantId);
+    ClientCredential credential = new ClientCredential(appId, appKey);
+    var token = await context.AcquireTokenAsync(resource, credential);
 
-    //get data store location and connection string 
-    //get get key for the blob storage 
-    string connectionString = ValidateConnectionToAS.GetASConnectionString(request, AzureTokenAS, ASServerUrl);
+
+    string password = token.AccessToken;
+    string connectionString = $"Provider=MSOLAP;Data Source={asServer};Password={password};";
 
 
-    string jsonContents = File.ReadAllText(request.Info.App.AppFilePath + "/" + modelFile);
+    string jsonContents = req.GetQueryNameValuePairs()
+            .FirstOrDefault(q => string.Compare(q.Key, "jsonModel", true) == 0)
+            .Value;
 
     Server server = null;
     try
@@ -59,11 +69,12 @@ public static async Task Run()
 
         server.Disconnect(true);
 
-        return new ActionResponse(ActionStatus.Success);
+        return req.CreateResponse(HttpStatusCode.OK, "Done");
     }
     catch (Exception e)
     {
-        return new ActionResponse(ActionStatus.Failure, string.Empty, e, null);
+        HttpResponseMessage res = req.CreateErrorResponse(HttpStatusCode.InternalServerError, ex);
+        return res;
     }
     finally
     {
